@@ -21,18 +21,25 @@ static int width = 800, height = 600;
 
 mat4 ViewMatrix;
 mat4 ProjectionMatrix;
+mat4 ViewMatrixReflection;
 
 // Положение камеры
-vec3 position = vec3(0, 0, 5);
+vec3 position = vec3(15, 20, 0);
+vec3 reflPosition = vec3(15, 20, 0);
 // Горизонтальный угол
-float horizontalAngle = 3.14f;
+float horizontalAngle = 4.7f;
 // Вертикальный угол
-float verticalAngle = 0.0f;
+float verticalAngle = -1.0f;
 //Скорость движения
-float speed = 3.0f;
+float speed = 10.0f;
 //Скорость мыши
 float mouseSpeed = 0.002f;
 
+vec3 reflDirection = vec3(
+	cos(verticalAngle) * sin(horizontalAngle),
+	-sin(verticalAngle),
+	cos(verticalAngle) * cos(horizontalAngle)
+	);
 
 //Загрузка шейдеров из файла
 GLuint LoadShaders(const char * vertex_file_path, const char * fragment_file_path) {
@@ -135,6 +142,11 @@ mat4 GetViewMatrix() {
 	return ViewMatrix;
 }
 
+//Получить матрицу View
+mat4 GetViewMatrixReflection() {
+	return ViewMatrixReflection;
+}
+
 //Получить матрицу Projection
 mat4 GetProjectionMatrix() {
 	return ProjectionMatrix;
@@ -182,11 +194,13 @@ void ComputeMatricesFromInputs(GLFWwindow* window) {
 	if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS ||
 		glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
 		position += direction * deltaTime * speed;
+		reflPosition -= direction * deltaTime * speed;
 	}
 	// Move backward
 	if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS ||
 		glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
 		position -= direction * deltaTime * speed;
+		reflPosition += direction * deltaTime * speed;
 	}
 	// Strafe right
 	if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS ||
@@ -207,6 +221,13 @@ void ComputeMatricesFromInputs(GLFWwindow* window) {
 		position,           // Camera is here
 		position + direction, // and looks here : at the same position, plus "direction"
 		up                  // Head is up (set to 0,-1,0 to look upside-down)
+		);
+
+
+	ViewMatrixReflection = lookAt(
+		vec3(reflPosition.x,  -(position.y), position.z),           // Camera is here
+		vec3(reflPosition.x, -(position.y), position.z) + reflDirection, // and looks here : at the same position, plus "direction"
+		vec3(0,-1,0)         // Head is up (set to 0,-1,0 to look upside-down)
 		);
 
 	// For the next frame, the "last time" will be "now"

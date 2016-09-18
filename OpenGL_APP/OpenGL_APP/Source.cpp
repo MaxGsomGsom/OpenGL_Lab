@@ -1,9 +1,11 @@
+#pragma region Includes
+
 #include <stdio.h>
 #include <stdlib.h>
 
 #include <GL/glew.h>
 
-#include <GLFW\glfw3.h>
+#include <GLFW/glfw3.h>
 GLFWwindow* window;
 
 #include <glm/glm.hpp>
@@ -22,8 +24,34 @@ using namespace std;
 
 #include "Helpers.h"
 
+#pragma endregion
 
 static int width = 800, height = 600;
+
+
+void DrawMesh(GLint vertexbuffer, GLint uvbuffer, GLint normalbuffer, int verticesSize) {
+	// Загрузка вершин в шейдер
+	glEnableVertexAttribArray(0);
+	glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
+
+	glEnableVertexAttribArray(1);
+	glBindBuffer(GL_ARRAY_BUFFER, uvbuffer);
+	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, (void*)0);
+
+	glEnableVertexAttribArray(2);
+	glBindBuffer(GL_ARRAY_BUFFER, normalbuffer);
+	glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
+
+	// отрисовка полигонов
+	glDrawArrays(GL_TRIANGLES, 0, verticesSize);
+
+
+	glDisableVertexAttribArray(0);
+	glDisableVertexAttribArray(1);
+	glDisableVertexAttribArray(2);
+}
+
 
 int main(void)
 {
@@ -64,24 +92,28 @@ int main(void)
 
 	// Режим ввода
 	glfwSetInputMode(window, GLFW_STICKY_KEYS, GL_TRUE);
+	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
-	//Очистка экрана
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	glClearColor(0.0f, 0.0f, 0.4f, 0.0f);
 
 	//Создание Vertex Array
 	GLuint VertexArrayID;
 	glGenVertexArrays(1, &VertexArrayID);
 	glBindVertexArray(VertexArrayID);
 
-	// Компиляция шейдеров из файла
-	GLuint programID = LoadShaders("VertexShader.gl", "FragmentShader.gl");
 
 	// Вкл тест глубины
 	glEnable(GL_DEPTH_TEST);
 	glDepthFunc(GL_LESS);
 
+	glClearColor(0.0f, 0.4f, 0.0f, 0.0f);
+
 #pragma endregion
+
+#pragma region Shaders
+
+	// Компиляция шейдеров из файла
+	GLuint programID = LoadShaders("VertexShader.gl", "FragmentShader.gl");
+	GLuint programID_RTT = LoadShaders("VertexShader.gl", "FragmentShaderRTT.gl");
 
 	// Получаем ID матриц из шейдера 
 	GLuint MatrixID = glGetUniformLocation(programID, "MVP");
@@ -99,6 +131,28 @@ int main(void)
 	GLuint AmbientColorPowerID = glGetUniformLocation(programID, "AmbientColorPower");
 	GLuint SpecularColorPowerID = glGetUniformLocation(programID, "SpecularColorPower");
 
+	//=================================
+
+	// Получаем ID матриц из шейдера 
+	GLuint MatrixID_RTT = glGetUniformLocation(programID_RTT, "MVP");
+	GLuint ViewMatrixID_RTT = glGetUniformLocation(programID_RTT, "V");
+	GLuint ModelMatrixID_RTT = glGetUniformLocation(programID_RTT, "M");
+
+	// Получаем ID текстуры из шейдера
+	GLuint TextureID_RTT = glGetUniformLocation(programID_RTT, "MeshTexture");
+
+	// Получаем ID источника света из шейдера
+	GLuint LightID_RTT = glGetUniformLocation(programID_RTT, "LightPosition_worldspace");
+	GLuint LightColorID_RTT = glGetUniformLocation(programID_RTT, "LightColor");
+	GLuint LightPowerID_RTT = glGetUniformLocation(programID_RTT, "LightPower");
+
+	GLuint AmbientColorPowerID_RTT = glGetUniformLocation(programID_RTT, "AmbientColorPower");
+	GLuint SpecularColorPowerID_RTT = glGetUniformLocation(programID_RTT, "SpecularColorPower");
+
+	//==============================================
+#pragma endregion
+
+#pragma region Model_Loading
 	//==============================================
 	//Загрузка текстур
 	GLuint TextureBall = SOIL_load_OGL_texture
@@ -171,14 +225,124 @@ int main(void)
 
 	}
 
+#pragma endregion
 
-
+#pragma region FrameBuffer
 	//==============================================
 
+	// The framebuffer, which regroups 0, 1, or more textures, and 0 or 1 depth buffer.
+	GLuint FramebufferName = 0;
+	glGenFramebuffers(1, &FramebufferName);
+	glBindFramebuffer(GL_FRAMEBUFFER, FramebufferName);
+
+	// The texture we're going to render to
+	GLuint renderedTexture;
+	glGenTextures(1, &renderedTexture);
+
+	// "Bind" the newly created texture : all future texture functions will modify this texture
+	glBindTexture(GL_TEXTURE_2D, renderedTexture);
+
+	// Give an empty image to OpenGL ( the last "0" means "empty" )
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, 0);
+
+	// Poor filtering
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+	// The depth buffer
+	GLuint depthrenderbuffer;
+	glGenRenderbuffers(1, &depthrenderbuffer);
+	glBindRenderbuffer(GL_RENDERBUFFER, depthrenderbuffer);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, width, height);
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthrenderbuffer);
+
+	// Set "renderedTexture" as our colour attachement #0
+	glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, renderedTexture, 0);
+
+	// Set the list of draw buffers.
+	GLenum DrawBuffers[1] = { GL_COLOR_ATTACHMENT0 };
+	glDrawBuffers(1, DrawBuffers); // "1" is the size of DrawBuffers
+
+	// Always check that our framebuffer is ok
+	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+		return false;
+#pragma endregion
+
+
 	do {
+
+		//==========================================
+		//==========================================
+		//==========================================
+
+		// Рендерить изображение в буффер
+		glBindFramebuffer(GL_FRAMEBUFFER, FramebufferName);
+		glViewport(0, 0, width, height);
+
 		// Очистка экрана
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		// Загрука шейдера
+		glUseProgram(programID_RTT);
+
+		//==============================================
+		// Вычисление матрицы MVP
+		ComputeMatricesFromInputs(window);
+		mat4 ProjectionMatrix_RTT = GetProjectionMatrix();
+		mat4 ViewMatrix_RTT = GetViewMatrixReflection();
+		mat4 ModelMatrix_RTT = mat4(1.0);
+		mat4 MVP_RTT = ProjectionMatrix_RTT * ViewMatrix_RTT * ModelMatrix_RTT;
+
+		// Загрузка матриц в шейдер
+		glUniformMatrix4fv(MatrixID_RTT, 1, GL_FALSE, &MVP_RTT[0][0]);
+		glUniformMatrix4fv(ModelMatrixID_RTT, 1, GL_FALSE, &ModelMatrix_RTT[0][0]);
+		glUniformMatrix4fv(ViewMatrixID_RTT, 1, GL_FALSE, &ViewMatrix_RTT[0][0]);
+
+		//==============================================
+		// Загрузка источника света в шейдер
+		glUniform3f(LightID_RTT, 10, 10, 10);
+		glUniform1f(LightPowerID_RTT, 150);
+		glUniform3f(LightColorID_RTT, 1,1,1);
+		glUniform3f(AmbientColorPowerID_RTT, 0.31, 0.31, 0.31);
+		glUniform3f(SpecularColorPowerID_RTT, 0.3, 0.3, 0.3);
+
+		// Загрузка текстуры в шейдер
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, TextureBall);
+		glActiveTexture(GL_TEXTURE1);
+		glBindTexture(GL_TEXTURE_2D, TextureCube);
+		
+		//рисуем шары
+		glUniform1i(TextureID_RTT, 0);
+		int m = 0;
+		DrawMesh(vertexbuffer[m], uvbuffer[m], normalbuffer[m], vertices[m].size());
+		m = 3;
+		DrawMesh(vertexbuffer[m], uvbuffer[m], normalbuffer[m], vertices[m].size());
+		m = 4;
+		DrawMesh(vertexbuffer[m], uvbuffer[m], normalbuffer[m], vertices[m].size());
+		m = 5;
+		DrawMesh(vertexbuffer[m], uvbuffer[m], normalbuffer[m], vertices[m].size());
+
+		//куб
+		glUniform1i(TextureID_RTT, 1);
+		m = 2;
+		DrawMesh(vertexbuffer[m], uvbuffer[m], normalbuffer[m], vertices[m].size());
+		
+
+		//==========================================
+		//==========================================
+		//==========================================
+
+
+		// Рендерить на экран
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		glViewport(0, 0, width, height);
+
+		// Очистка экрана
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+		// Загрузка шейдера
 		glUseProgram(programID);
 
 		//==============================================
@@ -196,38 +360,46 @@ int main(void)
 
 		//==============================================
 		// Загрузка источника света в шейдер
-		glUniform3f(LightID, 4, 4, 4);
-		glUniform1f(LightPowerID, 50);
-		glUniform3f(LightColorID, 1,1,1);
-		glUniform3f(AmbientColorPowerID, 0.1, 0.1, 0.1);
+		glUniform3f(LightID, 10, 10, 10);
+		glUniform1f(LightPowerID, 150);
+		glUniform3f(LightColorID, 1, 1, 1);
+		glUniform3f(AmbientColorPowerID, 0.31, 0.31, 0.31);
 		glUniform3f(SpecularColorPowerID, 0.3, 0.3, 0.3);
 
 		// Загрузка текстуры в шейдер
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D, TextureBall);
+		glActiveTexture(GL_TEXTURE1);
+		glBindTexture(GL_TEXTURE_2D, TextureCube);
+		glActiveTexture(GL_TEXTURE2);
+		glBindTexture(GL_TEXTURE_2D, renderedTexture); //полученная текстура
+
+		
+		//рисуем шары
 		glUniform1i(TextureID, 0);
+		m = 0;
+		DrawMesh(vertexbuffer[m], uvbuffer[m], normalbuffer[m], vertices[m].size());
+		m = 3;
+		DrawMesh(vertexbuffer[m], uvbuffer[m], normalbuffer[m], vertices[m].size());
+		m = 4;
+		DrawMesh(vertexbuffer[m], uvbuffer[m], normalbuffer[m], vertices[m].size());
+		m = 5;
+		DrawMesh(vertexbuffer[m], uvbuffer[m], normalbuffer[m], vertices[m].size());
 
-		// Загрузка вершин в шейдер
-		glEnableVertexAttribArray(0);
-		glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer[0]);
-		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
+		//плоскость
+		glUniform1i(TextureID, 2);
+		m = 1;
+		DrawMesh(vertexbuffer[m], uvbuffer[m], normalbuffer[m], vertices[m].size());
 
-		glEnableVertexAttribArray(1);
-		glBindBuffer(GL_ARRAY_BUFFER, uvbuffer[0]);
-		glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, (void*)0);
-
-		glEnableVertexAttribArray(2);
-		glBindBuffer(GL_ARRAY_BUFFER, normalbuffer[0]);
-		glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
-
-		// отрисовка полигонов
-		glDrawArrays(GL_TRIANGLES, 0, vertices[0].size());
+		//куб
+		glUniform1i(TextureID, 1);
+		m = 2;
+		DrawMesh(vertexbuffer[m], uvbuffer[m], normalbuffer[m], vertices[m].size());
 
 
-		glDisableVertexAttribArray(0);
-		glDisableVertexAttribArray(1);
-		glDisableVertexAttribArray(2);
-
+		//==========================================
+		//==========================================
+		//==========================================
 		
 		// Свопнуть буферы
 		glfwSwapBuffers(window);
@@ -245,6 +417,7 @@ int main(void)
 		glDeleteBuffers(1, &normalbuffer[m]);
 	}
 	glDeleteProgram(programID);
+	glDeleteProgram(programID_RTT);
 	glDeleteTextures(1, &TextureID);
 	glDeleteVertexArrays(1, &VertexArrayID);
 
@@ -253,4 +426,3 @@ int main(void)
 
 	return 0;
 }
-
