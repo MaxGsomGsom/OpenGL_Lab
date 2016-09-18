@@ -130,8 +130,8 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
-    <None Include="SimpleFragmentShader.fragmentshader" />
-    <None Include="SimpleVertexShader.vertexshader" />
+    <None Include="FragmentShader.gl" />
+    <None Include="VertexShader.gl" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Helpers.h" />

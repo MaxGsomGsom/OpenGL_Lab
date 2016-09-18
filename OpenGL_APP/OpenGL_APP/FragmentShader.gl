@@ -1,0 +1,54 @@
+#version 330 core
+
+// Input params
+in vec2 UV;
+in vec3 Position_worldspace;
+in vec3 Normal_cameraspace;
+in vec3 EyeDirection_cameraspace;
+in vec3 LightDirection_cameraspace;
+
+// Output params
+out vec3 color;
+
+// Constants
+uniform sampler2D MeshTexture;
+uniform mat4 MV;
+uniform vec3 LightPosition_worldspace;
+uniform vec3 LightColor;
+uniform float LightPower;
+uniform vec3 AmbientColorPower;
+uniform vec3 SpecularColorPower;
+
+void main(){
+
+	// Light components
+	vec3 MaterialDiffuseColor = texture( MeshTexture, UV ).rgb;
+	vec3 MaterialAmbientColor = AmbientColorPower * MaterialDiffuseColor;
+	vec3 MaterialSpecularColor = SpecularColorPower;
+
+	// Light distance
+	float distance = length( LightPosition_worldspace - Position_worldspace );
+
+	// Normale to fragment
+	vec3 n = normalize( Normal_cameraspace );
+	// Light vector to fragment
+	vec3 l = normalize( LightDirection_cameraspace );
+	//Light intensity
+	float cosTheta = clamp( dot(n , l), 0, 1 );
+	
+	// Camera direction
+	vec3 E = normalize(EyeDirection_cameraspace);
+	// Light reflection direction
+	vec3 R = reflect(-l , n);
+	//Light reflection intensity
+	float cosAlpha = clamp( dot( E,R ), 0,1 );
+	
+	color = 
+		// Ambient light
+		MaterialAmbientColor +
+		// Diffuse light and texture
+		MaterialDiffuseColor * LightColor * LightPower * cosTheta / (distance*distance) +
+		// Specular light
+		MaterialSpecularColor * LightColor * LightPower * pow(cosAlpha,5) / (distance*distance);
+
+}
