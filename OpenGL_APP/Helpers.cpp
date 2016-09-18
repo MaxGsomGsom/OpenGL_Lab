@@ -10,15 +10,31 @@ using namespace std;
 #include <string.h>
 
 #include <GL/glew.h>
+
 #include <glm/glm.hpp>
 #include <glm/gtx/transform.hpp>
 using namespace glm;
-
 
 #include "Helpers.h"
 
 static int width = 800, height = 600;
 
+mat4 ViewMatrix;
+mat4 ProjectionMatrix;
+
+// Положение камеры
+vec3 position = vec3(0, 0, 5);
+// Горизонтальный угол
+float horizontalAngle = 3.14f;
+// Вертикальный угол
+float verticalAngle = 0.0f;
+//Скорость движения
+float speed = 3.0f;
+//Скорость мыши
+float mouseSpeed = 0.002f;
+
+
+//Загрузка шейдеров из файла
 GLuint LoadShaders(const char * vertex_file_path, const char * fragment_file_path) {
 
 	// Create the shaders
@@ -114,31 +130,17 @@ GLuint LoadShaders(const char * vertex_file_path, const char * fragment_file_pat
 	return ProgramID;
 }
 
-
-
-mat4 ViewMatrix;
-mat4 ProjectionMatrix;
-
+//Получить матрицу View
 mat4 GetViewMatrix() {
 	return ViewMatrix;
 }
+
+//Получить матрицу Projection
 mat4 GetProjectionMatrix() {
 	return ProjectionMatrix;
 }
 
-
-// Initial position of camera : on +Z
-vec3 position = vec3(0, 0, 5);
-// Initial horizontal angle : toward -Z
-float horizontalAngle = 3.14f;
-// Initial vertical angle : none
-float verticalAngle = 0.0f;
-
-float speed = 3.0f; // 3 units / second
-float mouseSpeed = 0.002f;
-
-
-
+//Рассчет матрицы в зависимости от действий пользователя
 void ComputeMatricesFromInputs(GLFWwindow* window) {
 
 	// glfwGetTime is called only once, the first time this function is called

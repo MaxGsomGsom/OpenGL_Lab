@@ -24,8 +24,8 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
-    <None Include="SimpleFragmentShader.fragmentshader" />
-    <None Include="SimpleVertexShader.vertexshader" />
+    <None Include="VertexShader.gl" />
+    <None Include="FragmentShader.gl" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Helpers.h">

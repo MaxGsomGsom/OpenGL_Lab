@@ -1,0 +1,42 @@
+#version 330 core
+
+// Input params
+layout(location = 0) in vec3 vertexPosition_modelspace;
+layout(location = 1) in vec2 vertexUV;
+layout(location = 2) in vec3 vertexNormal_modelspace;
+
+// Output params
+out vec2 UV;
+out vec3 Position_worldspace;
+out vec3 Normal_cameraspace;
+out vec3 EyeDirection_cameraspace;
+out vec3 LightDirection_cameraspace;
+
+// Constants
+uniform mat4 MVP;
+uniform mat4 V;
+uniform mat4 M;
+uniform vec3 LightPosition_worldspace;
+
+void main(){
+
+	//Vertex position in world space
+	gl_Position =  MVP * vec4(vertexPosition_modelspace, 1);
+	
+	// Vertex position in world space
+	Position_worldspace = (M * vec4(vertexPosition_modelspace,1)).xyz;
+	
+	//Vertex position and direction in camera space
+	vec3 vertexPosition_cameraspace = ( V * M * vec4(vertexPosition_modelspace,1)).xyz;
+	EyeDirection_cameraspace = vec3(0,0,0) - vertexPosition_cameraspace;
+
+	//Light position and direction in camera space
+	vec3 LightPosition_cameraspace = ( V * M * vec4(LightPosition_worldspace,1)).xyz;
+	LightDirection_cameraspace = LightPosition_cameraspace + EyeDirection_cameraspace;
+	
+	//Normale to vertex in camera space
+	Normal_cameraspace = ( V * M * vec4(vertexNormal_modelspace,0)).xyz;
+	
+	//Texture UV coords
+	UV = vertexUV;
+}

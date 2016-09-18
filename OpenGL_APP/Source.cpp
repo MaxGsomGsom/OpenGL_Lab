@@ -1,55 +1,49 @@
-// Include standard headers
 #include <stdio.h>
 #include <stdlib.h>
 
-// Include GLEW
 #include <GL/glew.h>
 
-// Include GLFW
 #include <GLFW\glfw3.h>
 GLFWwindow* window;
 
-// Include GLM
 #include <glm/glm.hpp>
 #include <glm/gtx/transform.hpp>
 using namespace glm;
 
 #include <SOIL2.h>
+
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>
 #include <assimp/scene.h> 
-
 using namespace Assimp;
 
 #include <vector>
-
 using namespace std;
 
-
 #include "Helpers.h"
-
 
 
 static int width = 800, height = 600;
 
 int main(void)
 {
-#pragma region Init
-	// Initialise GLFW
+
+#pragma region Init_libs
+
+	// Инициалиация GLFW
 	if (!glfwInit())
 	{
 		fprintf(stderr, "Failed to initialize GLFW\n");
 		getchar();
 		return -1;
 	}
-	
+
 	glfwWindowHint(GLFW_SAMPLES, 4);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-	//glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE); // To make MacOS happy; should not be needed
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-	// Open a window and create its OpenGL context
+	// Инициалиация окна OpenGL
 	window = glfwCreateWindow(width, height, "OpenGL_APP", NULL, NULL);
 	if (window == NULL) {
 		fprintf(stderr, "Failed to open GLFW window. If you have an Intel GPU, they are not 3.3 compatible. Try the 2.1 version of the tutorials.\n");
@@ -59,7 +53,7 @@ int main(void)
 	}
 	glfwMakeContextCurrent(window);
 
-	// Initialize GLEW
+	// Инициалиация GLEW
 	glewExperimental = GL_TRUE;
 	if (glewInit() != GLEW_OK) {
 		fprintf(stderr, "Failed to initialize GLEW\n");
@@ -68,272 +62,193 @@ int main(void)
 		return -1;
 	}
 
-	// Ensure we can capture the escape key being pressed below
+	// Режим ввода
 	glfwSetInputMode(window, GLFW_STICKY_KEYS, GL_TRUE);
 
+	//Очистка экрана
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	// Dark blue background
 	glClearColor(0.0f, 0.0f, 0.4f, 0.0f);
 
+	//Создание Vertex Array
 	GLuint VertexArrayID;
 	glGenVertexArrays(1, &VertexArrayID);
 	glBindVertexArray(VertexArrayID);
 
-	// Create and compile our GLSL program from the shaders
-	GLuint programID = LoadShaders("SimpleVertexShader.vertexshader", "SimpleFragmentShader.fragmentshader");
+	// Компиляция шейдеров из файла
+	GLuint programID = LoadShaders("VertexShader.gl", "FragmentShader.gl");
+
+	// Вкл тест глубины
+	glEnable(GL_DEPTH_TEST);
+	glDepthFunc(GL_LESS);
 
 #pragma endregion
 
-	// Enable depth test
-	glEnable(GL_DEPTH_TEST);
-	// Accept fragment if it closer to the camera than the former one
-	glDepthFunc(GL_LESS);
-
-	// Get a handle for our "MVP" uniform
+	// Получаем ID матриц из шейдера 
 	GLuint MatrixID = glGetUniformLocation(programID, "MVP");
+	GLuint ViewMatrixID = glGetUniformLocation(programID, "V");
+	GLuint ModelMatrixID = glGetUniformLocation(programID, "M");
 
-	//// Projection matrix : 45° Field of View, 4:3 ratio, display range : 0.1 unit <-> 100 units
-	//mat4 Projection = perspective(45.0f, 4.0f / 3.0f, 0.1f, 100.0f);
-	//// Or, for an ortho camera :
-	////glm::mat4 Projection = glm::ortho(-10.0f,10.0f,-10.0f,10.0f,0.0f,100.0f); // In world coordinates
+	// Получаем ID текстуры из шейдера
+	GLuint TextureID = glGetUniformLocation(programID, "MeshTexture");
 
-	//// Camera matrix
-	//mat4 View = lookAt(
-	//	vec3(4, 3, 3), // Camera is at (4,3,3), in World Space
-	//	vec3(0, 0, 0), // and looks at the origin
-	//	vec3(0, 1, 0)  // Head is up (set to 0,-1,0 to look upside-down)
-	//	);
-	//// Model matrix : an identity matrix (model will be at the origin)
-	//mat4 Model = mat4(1.0f);
-	//// Our ModelViewProjection : multiplication of our 3 matrices
-	//mat4 MVP = Projection * View * Model; // Remember, matrix multiplication is the other way around
+	// Получаем ID источника света из шейдера
+	GLuint LightID = glGetUniformLocation(programID, "LightPosition_worldspace");
+	GLuint LightColorID = glGetUniformLocation(programID, "LightColor");
+	GLuint LightPowerID = glGetUniformLocation(programID, "LightPower");
 
+	GLuint AmbientColorPowerID = glGetUniformLocation(programID, "AmbientColorPower");
+	GLuint SpecularColorPowerID = glGetUniformLocation(programID, "SpecularColorPower");
 
-	// Load the texture using any two methods
-	//GLuint Texture = LoadBMP("uvtemplate.bmp");
-
-	GLuint Texture = SOIL_load_OGL_texture
+	//==============================================
+	//Загрузка текстур
+	GLuint TextureBall = SOIL_load_OGL_texture
 		(
-			"uvmap.DDS",
-			SOIL_LOAD_AUTO,
-			SOIL_CREATE_NEW_ID,
+			"res/ball_1.png", SOIL_LOAD_AUTO, SOIL_CREATE_NEW_ID,
 			SOIL_FLAG_MIPMAPS | SOIL_FLAG_INVERT_Y | SOIL_FLAG_COMPRESS_TO_DXT);
 
-	// Get a handle for our "myTextureSampler" uniform
-	GLuint TextureID = glGetUniformLocation(programID, "myTextureSampler");
+	GLuint TextureCube = SOIL_load_OGL_texture
+		(
+			"res/cube_1.png", SOIL_LOAD_AUTO, SOIL_CREATE_NEW_ID,
+			SOIL_FLAG_MIPMAPS | SOIL_FLAG_INVERT_Y | SOIL_FLAG_COMPRESS_TO_DXT);
 
+	GLuint TexturePlane = SOIL_load_OGL_texture
+		(
+			"res/plane_1.png", SOIL_LOAD_AUTO, SOIL_CREATE_NEW_ID,
+			SOIL_FLAG_MIPMAPS | SOIL_FLAG_INVERT_Y | SOIL_FLAG_COMPRESS_TO_DXT);
 
+	//==============================================
+	//Загрузка модели
 	Importer importer;
-	const aiScene* scene = importer.ReadFile("cube.obj", aiProcess_CalcTangentSpace |
-		aiProcess_Triangulate |
-		aiProcess_JoinIdenticalVertices |
-		aiProcess_SortByPType);
+	const aiScene* scene = importer.ReadFile("res/scene.obj", aiProcess_CalcTangentSpace |
+		aiProcess_Triangulate | aiProcess_JoinIdenticalVertices | aiProcess_SortByPType);
 
+	//массивы вершин
+	vector<float>* vertices = new vector<float>[scene->mNumMeshes];
+	vector<float>* uvs = new vector<float>[scene->mNumMeshes];
+	vector<float>* normals = new vector<float>[scene->mNumMeshes];
 
-	aiMesh* mesh = scene->mMeshes[0];
-
-	vector<float> vertices;
-	vector<float> uvs;
-	vector<float> normals;
-	vector<int> faces;
+	//Буферы вершин
+	GLuint* vertexbuffer = new GLuint[scene->mNumMeshes];
+	GLuint* uvbuffer = new GLuint[scene->mNumMeshes];
+	GLuint* normalbuffer = new GLuint[scene->mNumMeshes];
 	
+	for (int m = 0; m < scene->mNumMeshes; m++) {
+		aiMesh* mesh = scene->mMeshes[m];
 
-
-
-	for (int i = 0; i < mesh->mNumFaces; i++)
-	{
-		for (int k = 0; k < mesh->mFaces[i].mNumIndices; k++)
+		//заполняем массивы вершин
+		for (int i = 0; i < mesh->mNumFaces; i++)
 		{
-			int indice = mesh->mFaces[i].mIndices[k];
+			for (int k = 0; k < mesh->mFaces[i].mNumIndices; k++)
+			{
+				int indice = mesh->mFaces[i].mIndices[k];
 
-			vertices.push_back(mesh->mVertices[indice].x);
-			vertices.push_back(mesh->mVertices[indice].y);
-			vertices.push_back(mesh->mVertices[indice].z);
+				vertices[m].push_back(mesh->mVertices[indice].x);
+				vertices[m].push_back(mesh->mVertices[indice].y);
+				vertices[m].push_back(mesh->mVertices[indice].z);
 
-			uvs.push_back(mesh->mTextureCoords[0][indice].x);
-			uvs.push_back(mesh->mTextureCoords[0][indice].y);
+				uvs[m].push_back(mesh->mTextureCoords[0][indice].x);
+				uvs[m].push_back(mesh->mTextureCoords[0][indice].y);
 
-			normals.push_back(mesh->mNormals[indice].x);
-			normals.push_back(mesh->mNormals[indice].y);
-			normals.push_back(mesh->mNormals[indice].z);
+				normals[m].push_back(mesh->mNormals[indice].x);
+				normals[m].push_back(mesh->mNormals[indice].y);
+				normals[m].push_back(mesh->mNormals[indice].z);
+			}
+
 		}
+
+		//заполняем буферы вершин
+		glGenBuffers(1, &vertexbuffer[m]);
+		glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer[m]);
+		glBufferData(GL_ARRAY_BUFFER, vertices[m].size() * sizeof(float), &vertices[m][0], GL_STATIC_DRAW);
+
+		glGenBuffers(1, &uvbuffer[m]);
+		glBindBuffer(GL_ARRAY_BUFFER, uvbuffer[m]);
+		glBufferData(GL_ARRAY_BUFFER, uvs[m].size() * sizeof(float), &uvs[m][0], GL_STATIC_DRAW);
+
+		glGenBuffers(1, &normalbuffer[m]);
+		glBindBuffer(GL_ARRAY_BUFFER, normalbuffer[m]);
+		glBufferData(GL_ARRAY_BUFFER, uvs[m].size() * sizeof(float), &normals[m][0], GL_STATIC_DRAW);
 
 	}
 
-	// Our vertices. Tree consecutive floats give a 3D vertex; Three consecutive vertices give a triangle.
-	// A cube has 6 faces with 2 triangles each, so this makes 6*2=12 triangles, and 12*3 vertices
-	static const GLfloat g_vertex_buffer_data[] = {
-		-1.0f,-1.0f,-1.0f,
-		-1.0f,-1.0f, 1.0f,
-		-1.0f, 1.0f, 1.0f,
-		1.0f, 1.0f,-1.0f,
-		-1.0f,-1.0f,-1.0f,
-		-1.0f, 1.0f,-1.0f,
-		1.0f,-1.0f, 1.0f,
-		-1.0f,-1.0f,-1.0f,
-		1.0f,-1.0f,-1.0f,
-		1.0f, 1.0f,-1.0f,
-		1.0f,-1.0f,-1.0f,
-		-1.0f,-1.0f,-1.0f,
-		-1.0f,-1.0f,-1.0f,
-		-1.0f, 1.0f, 1.0f,
-		-1.0f, 1.0f,-1.0f,
-		1.0f,-1.0f, 1.0f,
-		-1.0f,-1.0f, 1.0f,
-		-1.0f,-1.0f,-1.0f,
-		-1.0f, 1.0f, 1.0f,
-		-1.0f,-1.0f, 1.0f,
-		1.0f,-1.0f, 1.0f,
-		1.0f, 1.0f, 1.0f,
-		1.0f,-1.0f,-1.0f,
-		1.0f, 1.0f,-1.0f,
-		1.0f,-1.0f,-1.0f,
-		1.0f, 1.0f, 1.0f,
-		1.0f,-1.0f, 1.0f,
-		1.0f, 1.0f, 1.0f,
-		1.0f, 1.0f,-1.0f,
-		-1.0f, 1.0f,-1.0f,
-		1.0f, 1.0f, 1.0f,
-		-1.0f, 1.0f,-1.0f,
-		-1.0f, 1.0f, 1.0f,
-		1.0f, 1.0f, 1.0f,
-		-1.0f, 1.0f, 1.0f,
-		1.0f,-1.0f, 1.0f
-	};
-
-	// Two UV coordinatesfor each vertex. They were created withe Blender.
-	static const GLfloat g_uv_buffer_data[] = {
-		0.000059f, 1.0f - 0.000004f,
-		0.000103f, 1.0f - 0.336048f,
-		0.335973f, 1.0f - 0.335903f,
-		1.000023f, 1.0f - 0.000013f,
-		0.667979f, 1.0f - 0.335851f,
-		0.999958f, 1.0f - 0.336064f,
-		0.667979f, 1.0f - 0.335851f,
-		0.336024f, 1.0f - 0.671877f,
-		0.667969f, 1.0f - 0.671889f,
-		1.000023f, 1.0f - 0.000013f,
-		0.668104f, 1.0f - 0.000013f,
-		0.667979f, 1.0f - 0.335851f,
-		0.000059f, 1.0f - 0.000004f,
-		0.335973f, 1.0f - 0.335903f,
-		0.336098f, 1.0f - 0.000071f,
-		0.667979f, 1.0f - 0.335851f,
-		0.335973f, 1.0f - 0.335903f,
-		0.336024f, 1.0f - 0.671877f,
-		1.000004f, 1.0f - 0.671847f,
-		0.999958f, 1.0f - 0.336064f,
-		0.667979f, 1.0f - 0.335851f,
-		0.668104f, 1.0f - 0.000013f,
-		0.335973f, 1.0f - 0.335903f,
-		0.667979f, 1.0f - 0.335851f,
-		0.335973f, 1.0f - 0.335903f,
-		0.668104f, 1.0f - 0.000013f,
-		0.336098f, 1.0f - 0.000071f,
-		0.000103f, 1.0f - 0.336048f,
-		0.000004f, 1.0f - 0.671870f,
-		0.336024f, 1.0f - 0.671877f,
-		0.000103f, 1.0f - 0.336048f,
-		0.336024f, 1.0f - 0.671877f,
-		0.335973f, 1.0f - 0.335903f,
-		0.667969f, 1.0f - 0.671889f,
-		1.000004f, 1.0f - 0.671847f,
-		0.667979f, 1.0f - 0.335851f
-	};
 
 
-	// This will identify our vertex buffer
-	GLuint vertexbuffer;
-	// Generate 1 buffer, put the resulting identifier in vertexbuffer
-	glGenBuffers(1, &vertexbuffer);
-	// The following commands will talk about our 'vertexbuffer' buffer
-	glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
-	// Give our vertices to OpenGL.
-	//glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices.data(), GL_STATIC_DRAW);
-	glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), &vertices[0], GL_STATIC_DRAW);
-
-	GLuint uvbuffer;
-	glGenBuffers(1, &uvbuffer);
-	glBindBuffer(GL_ARRAY_BUFFER, uvbuffer);
-	glBufferData(GL_ARRAY_BUFFER, uvs.size() * sizeof(float), &uvs[0], GL_STATIC_DRAW);
+	//==============================================
 
 	do {
-		// Clear the screen
+		// Очистка экрана
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		
+		// Загрука шейдера
 		glUseProgram(programID);
 
-
-		// Compute the MVP matrix from keyboard and mouse input
+		//==============================================
+		// Вычисление матрицы MVP
 		ComputeMatricesFromInputs(window);
 		mat4 ProjectionMatrix = GetProjectionMatrix();
 		mat4 ViewMatrix = GetViewMatrix();
 		mat4 ModelMatrix = mat4(1.0);
 		mat4 MVP = ProjectionMatrix * ViewMatrix * ModelMatrix;
 
-
-		// Send our transformation to the currently bound shader, 
-		// in the "MVP" uniform
+		// Загрузка матриц в шейдер
 		glUniformMatrix4fv(MatrixID, 1, GL_FALSE, &MVP[0][0]);
+		glUniformMatrix4fv(ModelMatrixID, 1, GL_FALSE, &ModelMatrix[0][0]);
+		glUniformMatrix4fv(ViewMatrixID, 1, GL_FALSE, &ViewMatrix[0][0]);
 
-		// Bind our texture in Texture Unit 0
+		//==============================================
+		// Загрузка источника света в шейдер
+		glUniform3f(LightID, 4, 4, 4);
+		glUniform1f(LightPowerID, 50);
+		glUniform3f(LightColorID, 1,1,1);
+		glUniform3f(AmbientColorPowerID, 0.1, 0.1, 0.1);
+		glUniform3f(SpecularColorPowerID, 0.3, 0.3, 0.3);
+
+		// Загрузка текстуры в шейдер
 		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, Texture);
-		// Set our "myTextureSampler" sampler to user Texture Unit 0
+		glBindTexture(GL_TEXTURE_2D, TextureBall);
 		glUniform1i(TextureID, 0);
 
-		// 1rst attribute buffer : vertices
+		// Загрузка вершин в шейдер
 		glEnableVertexAttribArray(0);
-		glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
-		glVertexAttribPointer(
-			0,                  // attribute. No particular reason for 0, but must match the layout in the shader.
-			3,                  // size
-			GL_FLOAT,           // type
-			GL_FALSE,           // normalized?
-			0,                  // stride
-			(void*)0            // array buffer offset
-			);
+		glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer[0]);
+		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
 
-		// 2nd attribute buffer : colors
 		glEnableVertexAttribArray(1);
-		glBindBuffer(GL_ARRAY_BUFFER, uvbuffer);
-		glVertexAttribPointer(
-			1,                                // attribute. No particular reason for 1, but must match the layout in the shader.
-			2,                                // size
-			GL_FLOAT,                         // type
-			GL_FALSE,                         // normalized?
-			0,                                // stride
-			(void*)0                          // array buffer offset
-			);
+		glBindBuffer(GL_ARRAY_BUFFER, uvbuffer[0]);
+		glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, (void*)0);
 
-		// Draw the triangle !
-		glDrawArrays(GL_TRIANGLES, 0, vertices.size()); // 12*3 indices starting at 0 -> 12 triangles
+		glEnableVertexAttribArray(2);
+		glBindBuffer(GL_ARRAY_BUFFER, normalbuffer[0]);
+		glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
+
+		// отрисовка полигонов
+		glDrawArrays(GL_TRIANGLES, 0, vertices[0].size());
+
 
 		glDisableVertexAttribArray(0);
 		glDisableVertexAttribArray(1);
+		glDisableVertexAttribArray(2);
 
-
-
-
-
-		// Swap buffers
+		
+		// Свопнуть буферы
 		glfwSwapBuffers(window);
 		glfwPollEvents();
 
-	} // Check if the ESC key was pressed or the window was closed
+	} //Проверка на закрытие окна
 	while (glfwGetKey(window, GLFW_KEY_ESCAPE) != GLFW_PRESS &&
 		glfwWindowShouldClose(window) == 0);
 
-
-	// Cleanup VBO and shader
-	glDeleteBuffers(1, &vertexbuffer);
-	glDeleteBuffers(1, &uvbuffer);
+	//==========================================
+	// Очистка буферов
+	for (int m = 0; m < scene->mNumMeshes; m++) {
+		glDeleteBuffers(1, &vertexbuffer[m]);
+		glDeleteBuffers(1, &uvbuffer[m]);
+		glDeleteBuffers(1, &normalbuffer[m]);
+	}
 	glDeleteProgram(programID);
 	glDeleteTextures(1, &TextureID);
 	glDeleteVertexArrays(1, &VertexArrayID);
 
-
-	// Close OpenGL window and terminate GLFW
+	// Закрытие окна
 	glfwTerminate();
 
 	return 0;
