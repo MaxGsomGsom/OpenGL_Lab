@@ -24,8 +24,7 @@ mat4 ProjectionMatrix;
 mat4 ViewMatrixReflection;
 
 // Положение камеры
-vec3 position = vec3(15, 20, 0);
-vec3 reflPosition = vec3(15, 20, 0);
+vec3 position = vec3(15, 20, 15);
 // Горизонтальный угол
 float horizontalAngle = 4.7f;
 // Вертикальный угол
@@ -35,11 +34,6 @@ float speed = 10.0f;
 //Скорость мыши
 float mouseSpeed = 0.002f;
 
-vec3 reflDirection = vec3(
-	cos(verticalAngle) * sin(horizontalAngle),
-	-sin(verticalAngle),
-	cos(verticalAngle) * cos(horizontalAngle)
-	);
 
 //Загрузка шейдеров из файла
 GLuint LoadShaders(const char * vertex_file_path, const char * fragment_file_path) {
@@ -194,13 +188,11 @@ void ComputeMatricesFromInputs(GLFWwindow* window) {
 	if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS ||
 		glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
 		position += direction * deltaTime * speed;
-		reflPosition -= direction * deltaTime * speed;
 	}
 	// Move backward
 	if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS ||
 		glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
 		position -= direction * deltaTime * speed;
-		reflPosition += direction * deltaTime * speed;
 	}
 	// Strafe right
 	if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS ||
@@ -225,8 +217,8 @@ void ComputeMatricesFromInputs(GLFWwindow* window) {
 
 
 	ViewMatrixReflection = lookAt(
-		vec3(reflPosition.x,  -(position.y), position.z),           // Camera is here
-		vec3(reflPosition.x, -(position.y), position.z) + reflDirection, // and looks here : at the same position, plus "direction"
+		vec3(position.x, -position.y, position.z),           // Camera is here
+		vec3(position.x, -position.y, position.z) + vec3(direction.x, -direction.y, direction.z), // and looks here : at the same position, plus "direction"
 		vec3(0,-1,0)         // Head is up (set to 0,-1,0 to look upside-down)
 		);
 
