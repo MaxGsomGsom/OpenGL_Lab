@@ -7,7 +7,7 @@ in vec3 Normal_cameraspace;
 in vec3 EyeDirection_cameraspace;
 in vec3 LightDirection_cameraspace;
 
-// Output params
+// Output color to texture unit 0
 layout(location = 0) out vec3 color;
 
 // Constants
