@@ -30,9 +30,9 @@ float horizontalAngle = 4.7f;
 // Вертикальный угол
 float verticalAngle = -1.0f;
 //Скорость движения
-float speed = 10.0f;
+float speed = 10.0f*0.25;
 //Скорость мыши
-float mouseSpeed = 0.002f;
+float mouseSpeed = 0.002f*0.25;
 
 
 //Загрузка шейдеров из файла

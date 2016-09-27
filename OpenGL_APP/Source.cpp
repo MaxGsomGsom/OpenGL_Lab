@@ -264,11 +264,26 @@ int main(void)
 
 #pragma endregion
 
+	double xx = 0;
+	double yy = 0;
+	double zz = 0;
 
 	do {
+		vec3 lightPos = vec3(5+xx, 5+yy, 5);
+		float lightPower = 50;
 
-		vec3 lightPos = vec3(5, 10, 5);
-		float lightPower = 150;
+		if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS)
+			xx += 0.1;
+		if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS)
+			xx -= 0.1;
+		if (glfwGetKey(window, GLFW_KEY_3) == GLFW_PRESS)
+			yy += 0.1;
+		if (glfwGetKey(window, GLFW_KEY_4) == GLFW_PRESS)
+			yy -= 0.1;
+		if (glfwGetKey(window, GLFW_KEY_5) == GLFW_PRESS)
+			zz += 0.1;
+		if (glfwGetKey(window, GLFW_KEY_6) == GLFW_PRESS)
+			zz -= 0.1;
 
 		//==========================================
 		//==========================================
